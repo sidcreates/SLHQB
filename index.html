@@ -1,0 +1,1345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Bank & Exam Paper Builder</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- KaTeX for LaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+
+    <!-- Google Fonts for Exam Customization -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,600;1,400&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- SortableJS for Drag-and-Drop -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- SheetJS (XLSX Parser) & PapaParse (CSV Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @media print {
+            body { background: white !important; color: black !important; padding: 0 !important; margin: 0 !important; }
+            .no-print { display: none !important; }
+            .paper-preview-container { box-shadow: none !important; border: none !important; padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
+            @page { size: A4; margin: 15mm; }
+        }
+        .font-sans-exam { font-family: 'Inter', sans-serif; }
+        .font-serif-exam { font-family: 'Lora', serif; }
+        .font-cinzel-exam { font-family: 'Cinzel', serif; }
+        .font-mono-exam { font-family: 'Roboto Mono', monospace; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- TOP NAVBAR -->
+    <header class="bg-indigo-900 text-white shadow-md sticky top-0 z-40 no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-indigo-700 rounded-lg">
+                    <i class="fa-solid font-bold fa-file-pen text-xl text-indigo-200"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-none">EduPaper Architect</h1>
+                    <p class="text-xs text-indigo-300">Question Bank & Exam Generator</p>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs -->
+            <nav class="flex space-x-2 bg-indigo-950 p-1 rounded-xl">
+                <button id="tab-btn-bank" onclick="switchTab('bank')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 bg-indigo-600 text-white shadow">
+                    <i class="fa-solid fa-database"></i>
+                    <span>Question Bank</span>
+                    <span id="bank-count-badge" class="ml-1 px-2 py-0.5 text-xs bg-indigo-800 rounded-full font-bold">0</span>
+                </button>
+                <button id="tab-btn-builder" onclick="switchTab('builder')" class="px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-indigo-200 hover:text-white hover:bg-indigo-800/50">
+                    <i class="fa-solid fa-layer-group"></i>
+                    <span>Paper Builder</span>
+                    <span id="paper-count-badge" class="ml-1 px-2 py-0.5 text-xs bg-indigo-800 rounded-full font-bold">0</span>
+                </button>
+            </nav>
+
+            <!-- Action Controls -->
+            <div class="flex items-center space-x-2">
+                <button onclick="openImportModal()" title="Import Excel / CSV / Google Sheets" class="bg-indigo-800 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-file-excel text-emerald-400"></i>
+                    <span class="hidden sm:inline">Import Excel</span>
+                </button>
+                <button onclick="exportFullBackup()" title="Backup Data" class="bg-indigo-800 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span class="hidden sm:inline">Backup</span>
+                </button>
+                <label title="Restore Data" class="bg-indigo-800 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-file-import"></i>
+                    <span class="hidden sm:inline">Restore</span>
+                    <input type="file" id="full-restore-input" accept=".json" onchange="importFullBackup(event)" class="hidden">
+                </label>
+                <button onclick="triggerPrint()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-semibold flex items-center space-x-2 shadow transition">
+                    <i class="fa-solid fa-print"></i>
+                    <span>Print / PDF</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col">
+
+        <!-- VIEW 1: QUESTION BANK DASHBOARD -->
+        <section id="view-bank" class="space-y-6">
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col gap-4">
+                <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="bank-search" oninput="renderQuestionBank()" placeholder="Search text, LaTeX formula, chapter, board..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none">
+                    </div>
+                    <button onclick="openQuestionModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center justify-center space-x-2 shadow transition whitespace-nowrap">
+                        <i class="fa-solid fa-plus"></i> <span>Add New Question</span>
+                    </button>
+                </div>
+
+                <!-- Comprehensive Filter Toolbar -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                    <select id="bank-filter-board" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium"><option value="">All Boards</option></select>
+                    <select id="bank-filter-grade" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium"><option value="">All Grades</option></select>
+                    <select id="bank-filter-subject" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium"><option value="">All Subjects</option></select>
+                    <select id="bank-filter-chapter" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium"><option value="">All Chapters</option></select>
+                    <select id="bank-filter-type" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium">
+                        <option value="">All Types</option>
+                        <option value="MCQ">MCQ</option>
+                        <option value="Short">Short Answer</option>
+                        <option value="Long">Long Answer</option>
+                    </select>
+                    <select id="bank-filter-difficulty" onchange="renderQuestionBank()" class="bg-slate-50 border border-slate-300 text-slate-700 text-xs rounded-lg px-2.5 py-2 outline-none font-medium">
+                        <option value="">All Difficulties</option>
+                        <option value="Easy">Easy</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Hard">Hard</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="bank-questions-container" class="space-y-3"></div>
+            
+            <div id="bank-empty-state" class="hidden text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
+                <i class="fa-solid fa-folder-open text-4xl text-slate-300 mb-3"></i>
+                <h3 class="text-base font-semibold text-slate-600">No questions found</h3>
+                <button onclick="openQuestionModal()" class="mt-4 px-4 py-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-lg text-sm font-medium">Add Question</button>
+            </div>
+        </section>
+
+        <!-- VIEW 2: PAPER BUILDER & LIVE PREVIEW -->
+        <section id="view-builder" class="hidden flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div class="lg:col-span-5 space-y-5 no-print">
+                <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                    
+                    <!-- SECTION 1: HEADER CONFIG -->
+                    <div class="border-b border-slate-200">
+                        <button onclick="toggleAccordion('acc-header')" class="w-full px-4 py-3 bg-slate-50 flex justify-between items-center font-semibold text-slate-700 text-sm hover:bg-slate-100">
+                            <span class="flex items-center space-x-2"><i class="fa-solid fa-heading text-indigo-600"></i><span>Exam Header & Logo</span></span>
+                            <i id="acc-header-icon" class="fa-solid fa-chevron-down text-slate-400"></i>
+                        </button>
+                        <div id="acc-header" class="p-4 space-y-3 bg-white">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">School Name</label>
+                                <input type="text" id="paper-school-name" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">Exam Title</label><input type="text" id="paper-title" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></div>
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">Subject</label><input type="text" id="paper-subject" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></div>
+                            </div>
+                            <div class="grid grid-cols-3 gap-2">
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">Class / Grade</label><input type="text" id="paper-class" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></div>
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">Time</label><input type="text" id="paper-time" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></div>
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">Date</label><input type="text" id="paper-date" oninput="updatePaperConfig()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Instructions</label>
+                                <textarea id="paper-instructions" oninput="updatePaperConfig()" rows="2" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm"></textarea>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 items-center">
+                                <div><label class="block text-xs font-semibold text-slate-600 mb-1">School Logo</label><input type="file" accept="image/*" onchange="handleLogoUpload(event)" class="text-xs w-full text-slate-500"></div>
+                                <button onclick="removeLogo()" class="text-xs text-red-600 hover:underline text-right">Remove Logo</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 2: FORMATTING -->
+                    <div class="border-b border-slate-200">
+                        <button onclick="toggleAccordion('acc-style')" class="w-full px-4 py-3 bg-slate-50 flex justify-between items-center font-semibold text-slate-700 text-sm hover:bg-slate-100">
+                            <span class="flex items-center space-x-2"><i class="fa-solid fa-palette text-indigo-600"></i><span>Font & Bullets</span></span>
+                            <i id="acc-style-icon" class="fa-solid fa-chevron-down text-slate-400"></i>
+                        </button>
+                        <div id="acc-style" class="p-4 space-y-3 bg-white">
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Font Family</label>
+                                    <select id="style-font-family" onchange="updatePaperStyle()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                                        <option value="font-sans-exam">Sans-Serif (Inter)</option>
+                                        <option value="font-serif-exam">Serif (Lora)</option>
+                                        <option value="font-cinzel-exam">Cinzel Header</option>
+                                        <option value="font-mono-exam">Monospace</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Font Size</label>
+                                    <select id="style-font-size" onchange="updatePaperStyle()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                                        <option value="text-xs">Small</option>
+                                        <option value="text-sm" selected>Medium</option>
+                                        <option value="text-base">Large</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">MCQ Bullets</label>
+                                <select id="style-mcq-bullet" onchange="updatePaperStyle()" class="w-full px-3 py-1.5 border border-slate-300 rounded text-sm">
+                                    <option value="A">(A), (B), (C), (D)</option>
+                                    <option value="a">a), b), c), d)</option>
+                                    <option value="i">(i), (ii), (iii), (iv)</option>
+                                    <option value="bullet">• Bullet Points</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 3: SECTIONS -->
+                    <div>
+                        <div class="px-4 py-3 bg-slate-50 flex justify-between items-center border-b border-slate-200">
+                            <span class="font-semibold text-slate-700 text-sm flex items-center space-x-2"><i class="fa-solid fa-list-ol text-indigo-600"></i><span>Exam Sections</span></span>
+                            <button onclick="addNewSection()" class="text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-2 py-1 rounded font-semibold"><i class="fa-solid fa-plus"></i> Add Section</button>
+                        </div>
+                        <div id="paper-sections-builder-list" class="p-3 space-y-3 bg-slate-100 max-h-[450px] overflow-y-auto"></div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- RIGHT LIVE PREVIEW CANVAS -->
+            <div class="lg:col-span-7 flex flex-col items-center">
+                <div class="w-full bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-4 flex justify-between items-center no-print">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">Live A4 Preview</span>
+                    <span id="preview-calc-marks" class="text-xs text-slate-500 font-medium">Total Marks: 0</span>
+                    <button onclick="triggerPrint()" class="px-3 py-1.5 bg-slate-800 text-white hover:bg-slate-700 rounded text-xs font-semibold flex items-center space-x-1"><i class="fa-solid fa-file-pdf"></i><span>Export PDF</span></button>
+                </div>
+
+                <div id="paper-preview-container" class="paper-preview-container bg-white text-slate-900 border border-slate-300 shadow-xl w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 transition-all">
+                    <div class="border-b-2 border-slate-900 pb-4 mb-6">
+                        <div class="flex justify-between items-start gap-4">
+                            <div id="exam-header-logo-container" class="hidden w-20 h-20 flex-shrink-0"><img id="exam-header-logo" src="" alt="Logo" class="w-full h-full object-contain"></div>
+                            <div class="flex-1 text-center">
+                                <h2 id="prev-school-name" class="text-xl md:text-2xl font-bold uppercase tracking-wide">SPRINGFIELD HIGH SCHOOL</h2>
+                                <h3 id="prev-exam-title" class="text-base md:text-lg font-semibold mt-1">ANNUAL EXAMINATION 2026</h3>
+                                <div class="flex justify-center items-center space-x-4 text-xs font-semibold mt-2">
+                                    <span id="prev-subject">SUBJECT: SCIENCE</span><span>•</span><span id="prev-class">CLASS: X</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 text-xs font-semibold mt-4 pt-2 border-t border-slate-400">
+                            <div><p id="prev-time">TIME ALLOWED: 3 HOURS</p><p id="prev-date" class="mt-0.5">DATE: 25/03/2026</p></div>
+                            <div class="text-right"><p id="prev-total-marks">MAX MARKS: 100</p></div>
+                        </div>
+                        <div id="prev-instructions-container" class="mt-3 pt-2 border-t border-dashed border-slate-300 text-xs text-slate-700">
+                            <p class="font-bold text-slate-900">General Instructions:</p>
+                            <div id="prev-instructions" class="whitespace-pre-line text-[11px] leading-relaxed mt-0.5"></div>
+                        </div>
+                    </div>
+
+                    <div id="prev-sections-list" class="space-y-6"></div>
+
+                    <div class="mt-16 pt-6 border-t border-slate-300 text-xs flex justify-between items-end">
+                        <p class="font-semibold text-slate-500">Teacher's Signature: __________________</p>
+                        <p class="text-slate-400">End of Question Paper</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- MODAL 1: ADD / EDIT QUESTION -->
+    <div id="modal-question" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 bg-indigo-900 text-white flex justify-between items-center">
+                <h3 id="modal-q-title" class="font-bold text-base flex items-center space-x-2"><i class="fa-solid fa-pen-to-square"></i><span>Add Question</span></h3>
+                <button onclick="closeQuestionModal()" class="text-indigo-200 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form id="form-question" onsubmit="saveQuestion(event)" class="p-6 overflow-y-auto space-y-4 flex-1">
+                <input type="hidden" id="q-id">
+
+                <!-- Board & Grade Metadata Row -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Board</label>
+                        <select id="q-board" class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                            <option value="ICSE">ICSE</option>
+                            <option value="IGCSE">IGCSE</option>
+                            <option value="CBSE">CBSE</option>
+                            <option value="General">General</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Grade / Class</label>
+                        <select id="q-grade" class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                            <option value="Grade 8">Grade 8</option>
+                            <option value="Grade 9">Grade 9</option>
+                            <option value="Grade 10">Grade 10</option>
+                            <option value="Grade 11">Grade 11</option>
+                            <option value="Grade 12">Grade 12</option>
+                        </select>
+                    </div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Subject</label><input type="text" id="q-subject" required placeholder="Physics" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Topic / Chapter</label><input type="text" id="q-topic" required placeholder="Kinematics" class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                        <select id="q-type" onchange="toggleMCQSection()" class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                            <option value="MCQ">MCQ</option>
+                            <option value="Short">Short Answer</option>
+                            <option value="Long">Long Answer</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Difficulty</label>
+                        <select id="q-difficulty" class="w-full px-3 py-2 border rounded-lg text-sm bg-slate-50">
+                            <option value="Easy">Easy</option><option value="Medium">Medium</option><option value="Hard">Hard</option>
+                        </select>
+                    </div>
+                    <div><label class="block text-xs font-semibold text-slate-600 mb-1">Marks</label><input type="number" id="q-marks" min="1" value="1" required class="w-full px-3 py-2 border rounded-lg text-sm"></div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Question Text (LaTeX Supported: $E=mc^2$)</label>
+                    <textarea id="q-text" rows="3" required placeholder="Enter question..." class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
+                </div>
+
+                <div id="mcq-options-container" class="space-y-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-bold text-slate-700">MCQ Options Mode</label>
+                        <div class="flex bg-slate-200 p-0.5 rounded text-xs">
+                            <button type="button" id="mcq-mode-struct-btn" onclick="setMCQMode('structured')" class="px-2 py-1 rounded bg-white shadow font-medium text-indigo-600">Structured</button>
+                            <button type="button" id="mcq-mode-raw-btn" onclick="setMCQMode('raw')" class="px-2 py-1 rounded text-slate-600 font-medium">Quick Paste / Raw</button>
+                        </div>
+                    </div>
+                    <div id="mcq-structured-block" class="space-y-2">
+                        <div id="mcq-options-list" class="space-y-2"></div>
+                        <button type="button" onclick="addMCQOption()" class="text-xs text-indigo-600 hover:text-indigo-800 font-semibold flex items-center space-x-1 mt-1"><i class="fa-solid fa-circle-plus"></i><span>Add Choice</span></button>
+                    </div>
+                    <div id="mcq-raw-block" class="hidden">
+                        <textarea id="q-raw-mcq" rows="3" placeholder="A) 10 B) 20 C) 30 D) 40" class="w-full px-3 py-2 border rounded-lg text-sm"></textarea>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Question Image (Optional)</label>
+                    <input type="text" id="q-image" placeholder="Image URL" class="w-full px-3 py-2 border rounded-lg text-sm mb-2">
+                    <input type="file" accept="image/*" onchange="handleImageUpload(event)" class="text-xs text-slate-500">
+                </div>
+
+                <div class="pt-4 flex justify-end space-x-2 border-t">
+                    <button type="button" onclick="closeQuestionModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm">Cancel</button>
+                    <button type="submit" class="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold shadow">Save Question</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL 2: SELECT QUESTION FROM BANK -->
+    <div id="modal-select-q" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 bg-indigo-900 text-white flex justify-between items-center">
+                <div><h3 class="font-bold text-base">Select Questions for Section</h3><p id="select-modal-section-title" class="text-xs text-indigo-300"></p></div>
+                <button onclick="closeSelectModal()" class="text-indigo-200 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-3 bg-slate-50 border-b grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 text-xs">
+                <input type="text" id="picker-search" oninput="renderPickerList()" placeholder="Search..." class="px-3 py-1.5 border rounded-lg col-span-2">
+                <select id="picker-board" onchange="renderPickerList()" class="px-2 py-1.5 border rounded-lg bg-white"><option value="">All Boards</option></select>
+                <select id="picker-grade" onchange="renderPickerList()" class="px-2 py-1.5 border rounded-lg bg-white"><option value="">All Grades</option></select>
+                <select id="picker-subject" onchange="renderPickerList()" class="px-2 py-1.5 border rounded-lg bg-white"><option value="">All Subjects</option></select>
+                <select id="picker-chapter" onchange="renderPickerList()" class="px-2 py-1.5 border rounded-lg bg-white"><option value="">All Chapters</option></select>
+                <select id="picker-type" onchange="renderPickerList()" class="px-2 py-1.5 border rounded-lg bg-white"><option value="">All Types</option><option value="MCQ">MCQ</option><option value="Short">Short Answer</option><option value="Long">Long Answer</option></select>
+            </div>
+            <div id="picker-list" class="flex-1 overflow-y-auto p-4 divide-y"></div>
+            <div class="p-4 bg-white border-t flex justify-between items-center">
+                <span class="text-xs text-slate-500"><span id="picker-selected-count">0</span> selected</span>
+                <div class="space-x-2">
+                    <button onclick="closeSelectModal()" class="px-4 py-2 border rounded-lg text-xs font-medium">Cancel</button>
+                    <button onclick="confirmQuestionSelection()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-semibold">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: EXCEL / CSV / GOOGLE SHEETS IMPORT -->
+    <div id="modal-import" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div class="px-6 py-4 bg-indigo-900 text-white flex justify-between items-center">
+                <h3 class="font-bold text-base flex items-center space-x-2"><i class="fa-solid fa-file-excel text-emerald-400"></i><span>Import Questions from Excel / Google Sheets</span></h3>
+                <button onclick="closeImportModal()" class="text-indigo-200 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-4 flex-1 text-sm">
+                <div class="bg-indigo-50 p-3 rounded-lg border border-indigo-100 flex justify-between items-center">
+                    <div><p class="font-semibold text-indigo-900 text-xs">Need the correct column structure?</p><p class="text-[11px] text-indigo-700">Download sample spreadsheet with Board & Grade fields.</p></div>
+                    <button onclick="downloadExcelTemplate()" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700 font-semibold"><i class="fa-solid fa-download mr-1"></i> Sample Excel</button>
+                </div>
+                <div class="space-y-2">
+                    <label class="block font-semibold text-slate-700 text-xs">Option 1: Upload Excel (.xlsx) or CSV File</label>
+                    <input type="file" id="excel-file-input" accept=".xlsx, .xls, .csv" onchange="parseExcelFile(event)" class="w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200">
+                </div>
+                <div class="space-y-2 border-t pt-3">
+                    <label class="block font-semibold text-slate-700 text-xs">Option 2: Import Published Google Sheets CSV Link</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="gsheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="flex-1 px-3 py-1.5 border rounded-lg text-xs outline-none">
+                        <button onclick="fetchGoogleSheetCSV()" class="px-3 py-1.5 bg-indigo-600 text-white text-xs rounded-lg font-semibold hover:bg-indigo-700">Fetch Sheet</button>
+                    </div>
+                </div>
+                <div id="import-preview-area" class="hidden space-y-2 border-t pt-3">
+                    <span class="font-bold text-xs text-slate-700">Parsed Questions Preview (<span id="parsed-count">0</span>):</span>
+                    <div id="import-preview-table" class="max-h-40 overflow-y-auto border rounded text-xs divide-y bg-slate-50 p-2"></div>
+                </div>
+            </div>
+            <div class="p-4 bg-white border-t flex justify-end space-x-2">
+                <button onclick="closeImportModal()" class="px-4 py-2 border rounded-lg text-xs font-medium">Cancel</button>
+                <button id="btn-confirm-import" onclick="confirmImportData()" disabled class="px-5 py-2 bg-emerald-600 text-white opacity-50 cursor-not-allowed rounded-lg text-xs font-semibold shadow">Add to Question Bank</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JS CORE ENGINE -->
+    <script>
+        const DB_NAME = 'EduPaperDB';
+        const DB_VERSION = 1;
+        let db = null;
+
+        /*function initDB() {
+            return new Promise((resolve) => {
+                const req = indexedDB.open(DB_NAME, DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains('questions')) database.createObjectStore('questions', { keyPath: 'id' });
+                    if (!database.objectStoreNames.contains('paperState')) database.createObjectStore('paperState', { keyPath: 'id' });
+                };
+                req.onsuccess = (e) => { db = e.target.result; resolve(db); };
+                req.onerror = () => resolve(null);
+            });
+        }
+
+        function dbSaveQuestions(qList) {
+            if (!db) return;
+            const tx = db.transaction('questions', 'readwrite');
+            const store = tx.objectStore('questions');
+            store.clear();
+            qList.forEach(q => store.put(q));
+        }
+
+        function dbLoadQuestions() {
+            return new Promise((resolve) => {
+                if (!db) return resolve([]);
+                const tx = db.transaction('questions', 'readonly');
+                const req = tx.objectStore('questions').getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+            });
+        }*/
+        
+        // Initialize Supabase Client (Replace with your project details from Supabase Dashboard -> Settings -> API)
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_KEY = 'YOUR_ANON_KEY';
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Fetch questions from Supabase on page load
+async function dbLoadQuestions() {
+    try {
+        const { data, error } = await _supabase
+            .from('questions')
+            .select('*')
+            .order('created_at', { ascending: true });
+            
+        if (error) {
+            console.error('Error fetching questions from Supabase:', error);
+            return [];
+        }
+        return data || [];
+    } catch (err) {
+        console.error('Network error loading questions:', err);
+        return [];
+    }
+}
+
+// Upsert questions array to Supabase
+async function dbSaveQuestions(qList) {
+    if (!qList || qList.length === 0) return;
+    try {
+        const { error } = await _supabase
+            .from('questions')
+            .upsert(qList, { onConflict: 'id' });
+            
+        if (error) console.error('Error saving to Supabase:', error);
+    } catch (err) {
+        console.error('Network error saving questions:', err);
+    }
+}
+
+// Delete a question directly from Supabase
+async function deleteQuestion(id) {
+    if (confirm('Delete this question?')) {
+        questionsBank = questionsBank.filter(q => q.id !== id);
+        
+        try {
+            const { error } = await _supabase
+                .from('questions')
+                .delete()
+                .eq('id', id);
+                
+            if (error) console.error('Error deleting question:', error);
+        } catch (err) {
+            console.error('Network error deleting question:', err);
+        }
+
+        populateFilters();
+        renderQuestionBank();
+    }
+}
+        function dbSavePaperState(pData) {
+            if (!db) return;
+            const tx = db.transaction('paperState', 'readwrite');
+            tx.objectStore('paperState').put({ id: 'currentPaper', data: pData });
+        }
+
+        function dbLoadPaperState() {
+            return new Promise((resolve) => {
+                if (!db) return resolve(null);
+                const tx = db.transaction('paperState', 'readonly');
+                const req = tx.objectStore('paperState').get('currentPaper');
+                req.onsuccess = () => resolve(req.result ? req.result.data : null);
+                req.onerror = () => resolve(null);
+            });
+        }
+
+        let questionsBank = [];
+        let currentMCQMode = 'structured';
+        let targetSectionId = null;
+        let sortableInstances = [];
+        let pendingParsedQuestions = [];
+
+        let paperData = {
+            header: {
+                schoolName: 'SPRINGFIELD HIGH SCHOOL',
+                title: 'ANNUAL EXAMINATION 2026',
+                subject: 'SCIENCE',
+                className: 'GRADE 10',
+                time: '3 HOURS',
+                date: '25/03/2026',
+                instructions: '1. All questions are compulsory.\n2. Read carefully.',
+                logo: ''
+            },
+            formatting: { fontFamily: 'font-sans-exam', fontSize: 'text-sm', bulletStyle: 'A' },
+            sections: [
+                { id: 'sec-1', title: 'SECTION A: MULTIPLE CHOICE QUESTIONS', instructions: 'Answer all questions.', questions: [] }
+            ]
+        };
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            await initDB();
+            const savedQ = await dbLoadQuestions();
+            if (savedQ && savedQ.length > 0) {
+                questionsBank = savedQ;
+            } else {
+                questionsBank = [
+                    { id: 'q-1', board: 'ICSE', grade: 'Grade 10', subject: 'Science', topic: 'Physics', type: 'MCQ', difficulty: 'Easy', marks: 1, text: 'What is the speed of light in vacuum?', options: ['3x10^8 m/s', '300 m/s', '100 m/s'], mcqMode: 'structured', rawMcq: '', image: '' },
+                    { id: 'q-2', board: 'IGCSE', grade: 'Grade 9', subject: 'Biology', topic: 'Cell Biology', type: 'Short', difficulty: 'Medium', marks: 3, text: 'State the function of mitochondria in eukaryotic cells.', options: [], mcqMode: 'structured', rawMcq: '', image: '' }
+                ];
+                dbSaveQuestions(questionsBank);
+            }
+
+            const savedPaper = await dbLoadPaperState();
+            if (savedPaper) paperData = savedPaper;
+
+            populateFilters();
+            renderQuestionBank();
+            loadPaperConfigUI();
+            renderPaper();
+        });
+
+        function switchTab(tab) {
+            const vBank = document.getElementById('view-bank');
+            const vBuilder = document.getElementById('view-builder');
+            const btnBank = document.getElementById('tab-btn-bank');
+            const btnBuilder = document.getElementById('tab-btn-builder');
+
+            if (tab === 'bank') {
+                vBank.classList.remove('hidden');
+                vBuilder.classList.add('hidden');
+                btnBank.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 bg-indigo-600 text-white shadow";
+                btnBuilder.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-indigo-200 hover:text-white hover:bg-indigo-800/50";
+            } else {
+                vBank.classList.add('hidden');
+                vBuilder.classList.remove('hidden');
+                btnBuilder.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 bg-indigo-600 text-white shadow";
+                btnBank.className = "px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center space-x-2 text-indigo-200 hover:text-white hover:bg-indigo-800/50";
+                renderPaper();
+            }
+        }
+
+        function toggleAccordion(id) {
+            const el = document.getElementById(id);
+            const icon = document.getElementById(id + '-icon');
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+                if (icon) icon.className = "fa-solid fa-chevron-up text-slate-400";
+            } else {
+                el.classList.add('hidden');
+                if (icon) icon.className = "fa-solid fa-chevron-down text-slate-400";
+            }
+        }
+
+        function populateFilters() {
+            const boards = [...new Set(questionsBank.map(q => q.board).filter(Boolean))];
+            const grades = [...new Set(questionsBank.map(q => q.grade).filter(Boolean))];
+            const subjects = [...new Set(questionsBank.map(q => q.subject).filter(Boolean))];
+            const chapters = [...new Set(questionsBank.map(q => q.topic).filter(Boolean))];
+
+            ['bank-filter-board', 'picker-board'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<option value="">All Boards</option>' + boards.map(b => `<option value="${b}">${b}</option>`).join('');
+            });
+
+            ['bank-filter-grade', 'picker-grade'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<option value="">All Grades</option>' + grades.map(g => `<option value="${g}">${g}</option>`).join('');
+            });
+
+            ['bank-filter-subject', 'picker-subject'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<option value="">All Subjects</option>' + subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+            });
+
+            ['bank-filter-chapter', 'picker-chapter'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.innerHTML = '<option value="">All Chapters</option>' + chapters.map(c => `<option value="${c}">${c}</option>`).join('');
+            });
+        }
+
+        function renderQuestionBank() {
+            const search = document.getElementById('bank-search').value.toLowerCase();
+            const board = document.getElementById('bank-filter-board').value;
+            const grade = document.getElementById('bank-filter-grade').value;
+            const subject = document.getElementById('bank-filter-subject').value;
+            const chapter = document.getElementById('bank-filter-chapter').value;
+            const type = document.getElementById('bank-filter-type').value;
+            const diff = document.getElementById('bank-filter-difficulty').value;
+
+            const filtered = questionsBank.filter(q => {
+                const matchSearch = q.text.toLowerCase().includes(search) || 
+                                    (q.topic && q.topic.toLowerCase().includes(search)) ||
+                                    (q.board && q.board.toLowerCase().includes(search));
+                const matchBoard = !board || q.board === board;
+                const matchGrade = !grade || q.grade === grade;
+                const matchSub = !subject || q.subject === subject;
+                const matchChap = !chapter || q.topic === chapter;
+                const matchType = !type || q.type === type;
+                const matchDiff = !diff || q.difficulty === diff;
+                return matchSearch && matchBoard && matchGrade && matchSub && matchChap && matchType && matchDiff;
+            });
+
+            document.getElementById('bank-count-badge').innerText = questionsBank.length;
+            const container = document.getElementById('bank-questions-container');
+            const emptyState = document.getElementById('bank-empty-state');
+
+            if (filtered.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            emptyState.classList.add('hidden');
+
+            container.innerHTML = filtered.map(q => `
+                <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow transition flex justify-between items-start gap-4">
+                    <div class="space-y-1 flex-1">
+                        <div class="flex flex-wrap items-center gap-2 text-xs">
+                            <span class="px-2 py-0.5 rounded font-bold bg-purple-50 text-purple-700 border border-purple-200">${q.board || 'General'}</span>
+                            <span class="px-2 py-0.5 rounded font-bold bg-blue-50 text-blue-700 border border-blue-200">${q.grade || 'All Grades'}</span>
+                            <span class="px-2 py-0.5 rounded font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${q.subject}</span>
+                            <span class="px-2 py-0.5 rounded font-medium bg-slate-100 text-slate-700">${q.topic || 'General'}</span>
+                            <span class="px-2 py-0.5 rounded font-medium bg-amber-50 text-amber-700">${q.type}</span>
+                            <span class="px-2 py-0.5 rounded bg-slate-100 text-slate-600">${q.difficulty}</span>
+                            <span class="font-bold text-slate-500">${q.marks} Mark(s)</span>
+                        </div>
+                        <p class="text-sm font-medium text-slate-800 render-math mt-2">${q.text}</p>
+                        ${q.type === 'MCQ' && q.mcqMode === 'structured' && q.options.length ? `
+                            <div class="grid grid-cols-2 gap-1 text-xs text-slate-600 mt-2 pl-2 border-l-2 border-slate-200">
+                                ${q.options.map((opt, i) => `<div><span class="font-bold">${String.fromCharCode(65+i)})</span> ${opt}</div>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${q.type === 'MCQ' && q.mcqMode === 'raw' && q.rawMcq ? `
+                            <div class="text-xs text-slate-600 mt-2 pl-2 border-l-2 border-slate-200 whitespace-pre-wrap">${q.rawMcq}</div>
+                        ` : ''}
+                    </div>
+                    <div class="flex items-center space-x-1">
+                        <button onclick="openQuestionModal('${q.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="deleteQuestion('${q.id}')" class="p-1.5 text-slate-400 hover:text-red-600"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                </div>
+            `).join('');
+
+            renderMath();
+        }
+
+        function openQuestionModal(editId = null) {
+            document.getElementById('form-question').reset();
+            document.getElementById('q-id').value = '';
+            document.getElementById('mcq-options-list').innerHTML = '';
+
+            if (editId) {
+                const q = questionsBank.find(i => i.id === editId);
+                if (q) {
+                    document.getElementById('q-id').value = q.id;
+                    document.getElementById('q-board').value = q.board || 'ICSE';
+                    document.getElementById('q-grade').value = q.grade || 'Grade 10';
+                    document.getElementById('q-subject').value = q.subject;
+                    document.getElementById('q-topic').value = q.topic || '';
+                    document.getElementById('q-type').value = q.type;
+                    document.getElementById('q-difficulty').value = q.difficulty;
+                    document.getElementById('q-marks').value = q.marks;
+                    document.getElementById('q-text').value = q.text;
+                    document.getElementById('q-image').value = q.image || '';
+                    document.getElementById('q-raw-mcq').value = q.rawMcq || '';
+                    setMCQMode(q.mcqMode || 'structured');
+                    if (q.options && q.options.length) q.options.forEach(o => addMCQOption(o));
+                    else { addMCQOption(); addMCQOption(); }
+                }
+            } else {
+                setMCQMode('structured');
+                addMCQOption(); addMCQOption(); addMCQOption(); addMCQOption();
+            }
+
+            toggleMCQSection();
+            document.getElementById('modal-question').classList.remove('hidden');
+        }
+
+        function closeQuestionModal() { document.getElementById('modal-question').classList.add('hidden'); }
+
+        function setMCQMode(mode) {
+            currentMCQMode = mode;
+            const structBtn = document.getElementById('mcq-mode-struct-btn');
+            const rawBtn = document.getElementById('mcq-mode-raw-btn');
+            const structBlock = document.getElementById('mcq-structured-block');
+            const rawBlock = document.getElementById('mcq-raw-block');
+
+            if (mode === 'structured') {
+                structBtn.className = "px-2 py-1 rounded bg-white shadow font-medium text-indigo-600";
+                rawBtn.className = "px-2 py-1 rounded text-slate-600 font-medium";
+                structBlock.classList.remove('hidden');
+                rawBlock.classList.add('hidden');
+            } else {
+                rawBtn.className = "px-2 py-1 rounded bg-white shadow font-medium text-indigo-600";
+                structBtn.className = "px-2 py-1 rounded text-slate-600 font-medium";
+                rawBlock.classList.remove('hidden');
+                structBlock.classList.add('hidden');
+            }
+        }
+
+        function toggleMCQSection() {
+            const type = document.getElementById('q-type').value;
+            const container = document.getElementById('mcq-options-container');
+            if (type === 'MCQ') container.classList.remove('hidden');
+            else container.classList.add('hidden');
+        }
+
+        function addMCQOption(val = '') {
+            const list = document.getElementById('mcq-options-list');
+            const idx = list.children.length;
+            const div = document.createElement('div');
+            div.className = "flex items-center space-x-2";
+            div.innerHTML = `
+                <span class="text-xs font-bold text-slate-400 w-4">${String.fromCharCode(65 + idx)}.</span>
+                <input type="text" class="mcq-opt-input flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-sm" value="${val}" placeholder="Option choice...">
+                <button type="button" onclick="this.parentElement.remove()" class="text-slate-400 hover:text-red-500 px-1"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            list.appendChild(div);
+        }
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => { document.getElementById('q-image').value = evt.target.result; };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function saveQuestion(e) {
+            e.preventDefault();
+            const id = document.getElementById('q-id').value || 'q-' + Date.now();
+            const type = document.getElementById('q-type').value;
+
+            let options = [];
+            if (type === 'MCQ' && currentMCQMode === 'structured') {
+                document.querySelectorAll('.mcq-opt-input').forEach(inp => {
+                    if (inp.value.trim()) options.push(inp.value.trim());
+                });
+            }
+
+            const qData = {
+                id,
+                board: document.getElementById('q-board').value,
+                grade: document.getElementById('q-grade').value,
+                subject: document.getElementById('q-subject').value.trim(),
+                topic: document.getElementById('q-topic').value.trim(),
+                type,
+                difficulty: document.getElementById('q-difficulty').value,
+                marks: parseInt(document.getElementById('q-marks').value) || 1,
+                text: document.getElementById('q-text').value.trim(),
+                options,
+                mcqMode: currentMCQMode,
+                rawMcq: document.getElementById('q-raw-mcq').value.trim(),
+                image: document.getElementById('q-image').value
+            };
+
+            const idx = questionsBank.findIndex(q => q.id === id);
+            if (idx > -1) questionsBank[idx] = qData;
+            else questionsBank.push(qData);
+
+            dbSaveQuestions(questionsBank);
+            populateFilters();
+            renderQuestionBank();
+            closeQuestionModal();
+        }
+
+        /*function deleteQuestion(id) {
+            if (confirm('Delete this question?')) {
+                questionsBank = questionsBank.filter(q => q.id !== id);
+                dbSaveQuestions(questionsBank);
+                populateFilters();
+                renderQuestionBank();
+            }
+        }*/
+
+        function loadPaperConfigUI() {
+            const h = paperData.header;
+            document.getElementById('paper-school-name').value = h.schoolName;
+            document.getElementById('paper-title').value = h.title;
+            document.getElementById('paper-subject').value = h.subject;
+            document.getElementById('paper-class').value = h.className;
+            document.getElementById('paper-time').value = h.time;
+            document.getElementById('paper-date').value = h.date;
+            document.getElementById('paper-instructions').value = h.instructions;
+
+            const f = paperData.formatting;
+            document.getElementById('style-font-family').value = f.fontFamily;
+            document.getElementById('style-font-size').value = f.fontSize;
+            document.getElementById('style-mcq-bullet').value = f.bulletStyle;
+
+            if (h.logo) {
+                document.getElementById('exam-header-logo').src = h.logo;
+                document.getElementById('exam-header-logo-container').classList.remove('hidden');
+            }
+        }
+
+        function updatePaperConfig() {
+            const h = paperData.header;
+            h.schoolName = document.getElementById('paper-school-name').value;
+            h.title = document.getElementById('paper-title').value;
+            h.subject = document.getElementById('paper-subject').value;
+            h.className = document.getElementById('paper-class').value;
+            h.time = document.getElementById('paper-time').value;
+            h.date = document.getElementById('paper-date').value;
+            h.instructions = document.getElementById('paper-instructions').value;
+
+            document.getElementById('prev-school-name').innerText = h.schoolName || 'SCHOOL NAME';
+            document.getElementById('prev-exam-title').innerText = h.title || 'EXAM TITLE';
+            document.getElementById('prev-subject').innerText = 'SUBJECT: ' + (h.subject || '-');
+            document.getElementById('prev-class').innerText = 'CLASS: ' + (h.className || '-');
+            document.getElementById('prev-time').innerText = 'TIME ALLOWED: ' + (h.time || '-');
+            document.getElementById('prev-date').innerText = 'DATE: ' + (h.date || '-');
+            document.getElementById('prev-instructions').innerText = h.instructions || '';
+
+            dbSavePaperState(paperData);
+        }
+
+        function handleLogoUpload(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    paperData.header.logo = evt.target.result;
+                    document.getElementById('exam-header-logo').src = evt.target.result;
+                    document.getElementById('exam-header-logo-container').classList.remove('hidden');
+                    dbSavePaperState(paperData);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function removeLogo() {
+            paperData.header.logo = '';
+            document.getElementById('exam-header-logo-container').classList.add('hidden');
+            dbSavePaperState(paperData);
+        }
+
+        function updatePaperStyle() {
+            const f = paperData.formatting;
+            f.fontFamily = document.getElementById('style-font-family').value;
+            f.fontSize = document.getElementById('style-font-size').value;
+            f.bulletStyle = document.getElementById('style-mcq-bullet').value;
+
+            const container = document.getElementById('paper-preview-container');
+            container.className = `paper-preview-container bg-white text-slate-900 border border-slate-300 shadow-xl w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 transition-all ${f.fontFamily} ${f.fontSize}`;
+
+            dbSavePaperState(paperData);
+            renderPaperCanvasOnly();
+        }
+
+        function addNewSection() {
+            const sec = {
+                id: 'sec-' + Date.now(),
+                title: `SECTION ${String.fromCharCode(65 + paperData.sections.length)}`,
+                instructions: 'Answer all questions.',
+                questions: []
+            };
+            paperData.sections.push(sec);
+            dbSavePaperState(paperData);
+            renderPaper();
+        }
+
+        function deleteSection(secId) {
+            if (confirm('Delete section?')) {
+                paperData.sections = paperData.sections.filter(s => s.id !== secId);
+                dbSavePaperState(paperData);
+                renderPaper();
+            }
+        }
+
+        function updateSectionMeta(secId, field, val) {
+            const sec = paperData.sections.find(s => s.id === secId);
+            if (sec) {
+                sec[field] = val;
+                dbSavePaperState(paperData);
+                renderPaperCanvasOnly();
+            }
+        }
+
+        function renderPaper() {
+            updatePaperConfig();
+            updatePaperStyle();
+            renderSectionBuilders();
+            renderPaperCanvasOnly();
+        }
+
+        function renderSectionBuilders() {
+            const list = document.getElementById('paper-sections-builder-list');
+            list.innerHTML = paperData.sections.map((sec, idx) => `
+                <div class="bg-white p-3 rounded-lg border border-slate-200 shadow-sm space-y-2">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-bold text-indigo-600">Section ${idx + 1}</span>
+                        <button onclick="deleteSection('${sec.id}')" class="text-xs text-red-500 hover:underline">Delete</button>
+                    </div>
+                    <input type="text" value="${sec.title}" oninput="updateSectionMeta('${sec.id}', 'title', this.value)" class="w-full px-2 py-1 border rounded text-xs font-semibold">
+                    <input type="text" value="${sec.instructions}" oninput="updateSectionMeta('${sec.id}', 'instructions', this.value)" class="w-full px-2 py-1 border rounded text-xs text-slate-600">
+                    <button onclick="openSelectModal('${sec.id}')" class="w-full py-1 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded text-xs font-semibold flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-plus-circle"></i> <span>Import Questions (${sec.questions.length})</span>
+                    </button>
+                </div>
+            `).join('');
+            document.getElementById('paper-count-badge').innerText = paperData.sections.reduce((a, b) => a + b.questions.length, 0);
+        }
+
+        function renderPaperCanvasOnly() {
+            const list = document.getElementById('prev-sections-list');
+            let totalMarks = 0;
+            sortableInstances.forEach(i => i.destroy());
+            sortableInstances = [];
+
+            list.innerHTML = paperData.sections.map((sec) => {
+                const secMarks = sec.questions.reduce((sum, q) => sum + (parseInt(q.marks) || 1), 0);
+                totalMarks += secMarks;
+
+                return `
+                    <div class="space-y-3">
+                        <div class="border-b-2 border-slate-900 pb-1 flex justify-between items-end">
+                            <div>
+                                <h4 class="font-bold text-sm uppercase tracking-wide">${sec.title}</h4>
+                                <p class="text-xs italic text-slate-600">${sec.instructions}</p>
+                            </div>
+                            <span class="text-xs font-bold whitespace-nowrap">Marks: ${secMarks}</span>
+                        </div>
+
+                        <div id="drag-sec-${sec.id}" data-sec-id="${sec.id}" class="space-y-3 min-h-[30px] p-1">
+                            ${sec.questions.map((q, qIdx) => `
+                                <div data-q-id="${q.id}" class="group relative pl-1 pr-1 py-1 rounded hover:bg-slate-50 transition cursor-move">
+                                    <div class="flex justify-between items-start gap-2">
+                                        <div class="flex-1">
+                                            <span class="font-bold mr-1">Q${qIdx + 1}.</span>
+                                            <span class="render-math">${q.text}</span>
+                                            ${q.image ? `<img src="${q.image}" class="max-h-36 my-2 rounded border">` : ''}
+                                            ${q.type === 'MCQ' && q.mcqMode === 'structured' && q.options.length ? `
+                                                <div class="grid grid-cols-2 gap-x-4 gap-y-1 mt-1 pl-4">
+                                                    ${q.options.map((opt, optIdx) => `<div><span class="font-semibold">${getBulletLabel(optIdx, paperData.formatting.bulletStyle)}.</span> ${opt}</div>`).join('')}
+                                                </div>
+                                            ` : ''}
+                                            ${q.type === 'MCQ' && q.mcqMode === 'raw' && q.rawMcq ? `<div class="mt-1 pl-4 whitespace-pre-wrap text-xs">${q.rawMcq}</div>` : ''}
+                                        </div>
+                                        <div class="flex items-center space-x-2">
+                                            <span class="text-xs font-semibold text-slate-500 whitespace-nowrap">[${q.marks}]</span>
+                                            <button onclick="removeQuestionFromSection('${sec.id}', '${q.id}')" class="no-print text-slate-300 hover:text-red-500 text-xs px-1"><i class="fa-solid fa-trash"></i></button>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            document.getElementById('prev-total-marks').innerText = 'MAX MARKS: ' + totalMarks;
+            document.getElementById('preview-calc-marks').innerText = 'Total Marks: ' + totalMarks;
+
+            paperData.sections.forEach(sec => {
+                const el = document.getElementById(`drag-sec-${sec.id}`);
+                if (el) {
+                    const sortable = Sortable.create(el, {
+                        group: 'questions',
+                        animation: 150,
+                        onEnd: function() { syncDragOrder(); }
+                    });
+                    sortableInstances.push(sortable);
+                }
+            });
+
+            renderMath();
+        }
+
+        function getBulletLabel(idx, style) {
+            if (style === 'A') return `(${String.fromCharCode(65 + idx)})`;
+            if (style === 'a') return `${String.fromCharCode(97 + idx)})`;
+            if (style === 'i') {
+                const r = ['(i)', '(ii)', '(iii)', '(iv)', '(v)'];
+                return r[idx] || `(${idx + 1})`;
+            }
+            return '•';
+        }
+
+        function syncDragOrder() {
+            paperData.sections.forEach(sec => {
+                const el = document.getElementById(`drag-sec-${sec.id}`);
+                if (el) {
+                    const ids = Array.from(el.children).map(c => c.getAttribute('data-q-id')).filter(Boolean);
+                    sec.questions = ids.map(id => questionsBank.find(q => q.id === id)).filter(Boolean);
+                }
+            });
+            dbSavePaperState(paperData);
+            renderPaperCanvasOnly();
+        }
+
+        function removeQuestionFromSection(secId, qId) {
+            const sec = paperData.sections.find(s => s.id === secId);
+            if (sec) {
+                sec.questions = sec.questions.filter(q => q.id !== qId);
+                dbSavePaperState(paperData);
+                renderPaper();
+            }
+        }
+
+        function openSelectModal(secId) {
+            targetSectionId = secId;
+            const sec = paperData.sections.find(s => s.id === secId);
+            document.getElementById('select-modal-section-title').innerText = sec ? sec.title : '';
+            populateFilters();
+            renderPickerList();
+            document.getElementById('modal-select-q').classList.remove('hidden');
+        }
+
+        function closeSelectModal() { document.getElementById('modal-select-q').classList.add('hidden'); }
+
+        function renderPickerList() {
+            const search = document.getElementById('picker-search').value.toLowerCase();
+            const board = document.getElementById('picker-board').value;
+            const grade = document.getElementById('picker-grade').value;
+            const subject = document.getElementById('picker-subject').value;
+            const chapter = document.getElementById('picker-chapter').value;
+            const type = document.getElementById('picker-type').value;
+
+            const sec = paperData.sections.find(s => s.id === targetSectionId);
+            const existingIds = sec ? sec.questions.map(q => q.id) : [];
+
+            const filtered = questionsBank.filter(q => {
+                const matchSearch = q.text.toLowerCase().includes(search) || (q.topic && q.topic.toLowerCase().includes(search));
+                const matchBoard = !board || q.board === board;
+                const matchGrade = !grade || q.grade === grade;
+                const matchSub = !subject || q.subject === subject;
+                const matchChap = !chapter || q.topic === chapter;
+                const matchType = !type || q.type === type;
+                return matchSearch && matchBoard && matchGrade && matchSub && matchChap && matchType;
+            });
+
+            const container = document.getElementById('picker-list');
+            container.innerHTML = filtered.map(q => {
+                const isSelected = existingIds.includes(q.id);
+                return `
+                    <label class="p-3 flex items-start space-x-3 hover:bg-slate-50 transition cursor-pointer">
+                        <input type="checkbox" value="${q.id}" ${isSelected ? 'checked' : ''} class="picker-cb mt-1 text-indigo-600 rounded border-slate-300" onchange="updatePickerCount()">
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-2 text-xs mb-1">
+                                <span class="font-bold text-purple-600">${q.board || 'ICSE'}</span><span>•</span>
+                                <span class="font-bold text-blue-600">${q.grade || 'Grade 10'}</span><span>•</span>
+                                <span class="font-semibold text-indigo-600">${q.subject}</span><span>•</span>
+                                <span class="text-slate-600">${q.topic || 'General'}</span><span>•</span>
+                                <span>${q.type}</span><span>•</span>
+                                <span>${q.marks} Mark(s)</span>
+                            </div>
+                            <p class="text-xs text-slate-800 render-math">${q.text}</p>
+                        </div>
+                    </label>
+                `;
+            }).join('');
+
+            updatePickerCount();
+            renderMath();
+        }
+
+        function updatePickerCount() {
+            document.getElementById('picker-selected-count').innerText = document.querySelectorAll('.picker-cb:checked').length;
+        }
+
+        function confirmQuestionSelection() {
+            const selected = Array.from(document.querySelectorAll('.picker-cb:checked')).map(cb => cb.value);
+            const sec = paperData.sections.find(s => s.id === targetSectionId);
+            if (sec) {
+                sec.questions = selected.map(id => questionsBank.find(q => q.id === id)).filter(Boolean);
+                dbSavePaperState(paperData);
+                renderPaper();
+            }
+            closeSelectModal();
+        }
+
+        // EXCEL / CSV / GOOGLE SHEETS IMPORT LOGIC
+        function openImportModal() {
+            pendingParsedQuestions = [];
+            document.getElementById('import-preview-area').classList.add('hidden');
+            document.getElementById('btn-confirm-import').disabled = true;
+            document.getElementById('btn-confirm-import').classList.add('opacity-50', 'cursor-not-allowed');
+            document.getElementById('modal-import').classList.remove('hidden');
+        }
+
+        function closeImportModal() { document.getElementById('modal-import').classList.add('hidden'); }
+
+        function downloadExcelTemplate() {
+            const templateData = [
+                {
+                    Board: 'ICSE',
+                    Grade: 'Grade 10',
+                    Subject: 'Physics',
+                    Topic: 'Kinematics',
+                    Type: 'MCQ',
+                    Difficulty: 'Easy',
+                    Marks: 1,
+                    QuestionText: 'What is the SI unit of force?',
+                    OptionA: 'Newton',
+                    OptionB: 'Joule',
+                    OptionC: 'Pascal',
+                    OptionD: 'Watt',
+                    MCQRaw: '',
+                    ImageURL: ''
+                },
+                {
+                    Board: 'IGCSE',
+                    Grade: 'Grade 9',
+                    Subject: 'Chemistry',
+                    Topic: 'Acids & Bases',
+                    Type: 'Short',
+                    Difficulty: 'Medium',
+                    Marks: 3,
+                    QuestionText: 'Define pH scale and express its relation with hydrogen ion concentration.',
+                    OptionA: '',
+                    OptionB: '',
+                    OptionC: '',
+                    OptionD: '',
+                    MCQRaw: '',
+                    ImageURL: ''
+                },
+                {
+                    Board: 'CBSE',
+                    Grade: 'Grade 10',
+                    Subject: 'Biology',
+                    Topic: 'Cell Biology',
+                    Type: 'Long',
+                    Difficulty: 'Hard',
+                    Marks: 5,
+                    QuestionText: 'Explain the detailed process of photosynthesis with a labeled diagram.',
+                    OptionA: '',
+                    OptionB: '',
+                    OptionC: '',
+                    OptionD: '',
+                    MCQRaw: '',
+                    ImageURL: ''
+                }
+            ];
+
+            const worksheet = XLSX.utils.json_to_sheet(templateData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "QuestionBankTemplate");
+            XLSX.writeFile(workbook, "Question_Bank_Template.xlsx");
+        }
+
+        function parseExcelFile(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const jsonRows = XLSX.utils.sheet_to_json(worksheet);
+                processImportedRows(jsonRows);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function fetchGoogleSheetCSV() {
+            const url = document.getElementById('gsheet-url').value.trim();
+            if (!url) return alert('Paste a public Google Sheets published CSV URL.');
+
+            Papa.parse(url, {
+                download: true,
+                header: true,
+                complete: function(results) {
+                    processImportedRows(results.data);
+                },
+                error: function() { alert('Failed to fetch Google Sheets CSV.'); }
+            });
+        }
+
+        function processImportedRows(rows) {
+            pendingParsedQuestions = [];
+            rows.forEach((row, i) => {
+                const text = row.QuestionText || row.Question || row.text || row.question;
+                if (!text) return;
+
+                const rawType = (row.Type || row.type || 'MCQ').toString().trim().toLowerCase();
+                let qType = 'MCQ';
+                if (rawType.includes('short')) qType = 'Short';
+                else if (rawType.includes('long')) qType = 'Long';
+
+                const opts = [];
+                if (qType === 'MCQ') {
+                    if (row.OptionA) opts.push(String(row.OptionA));
+                    if (row.OptionB) opts.push(String(row.OptionB));
+                    if (row.OptionC) opts.push(String(row.OptionC));
+                    if (row.OptionD) opts.push(String(row.OptionD));
+                }
+
+                pendingParsedQuestions.push({
+                    id: 'q-imp-' + Date.now() + '-' + i,
+                    board: row.Board || row.board || 'ICSE',
+                    grade: row.Grade || row.Class || row.grade || 'Grade 10',
+                    subject: row.Subject || 'General',
+                    topic: row.Topic || row.Chapter || 'General',
+                    type: qType,
+                    difficulty: row.Difficulty || 'Medium',
+                    marks: parseInt(row.Marks) || (qType === 'MCQ' ? 1 : (qType === 'Short' ? 3 : 5)),
+                    text: text,
+                    options: opts,
+                    mcqMode: opts.length ? 'structured' : (row.MCQRaw ? 'raw' : 'structured'),
+                    rawMcq: row.MCQRaw || '',
+                    image: row.ImageURL || ''
+                });
+            });
+
+            if (pendingParsedQuestions.length === 0) return alert('No valid questions found.');
+
+            document.getElementById('parsed-count').innerText = pendingParsedQuestions.length;
+            document.getElementById('import-preview-table').innerHTML = pendingParsedQuestions.map(q => `
+                <div class="p-1.5 flex justify-between items-center">
+                    <div>
+                        <span class="font-bold text-purple-600">[${q.board} - ${q.grade}]</span> 
+                        <span class="font-semibold text-indigo-600">${q.subject}</span>: 
+                        <span class="font-medium text-slate-800">${q.text}</span>
+                    </div>
+                    <span class="text-xs px-2 py-0.5 rounded font-semibold ${q.type === 'MCQ' ? 'bg-amber-100 text-amber-800' : (q.type === 'Short' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800')}">${q.type} (${q.marks}M)</span>
+                </div>
+            `).join('');
+
+            document.getElementById('import-preview-area').classList.remove('hidden');
+            const confirmBtn = document.getElementById('btn-confirm-import');
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
+        function confirmImportData() {
+            questionsBank = [...questionsBank, ...pendingParsedQuestions];
+            dbSaveQuestions(questionsBank);
+            populateFilters();
+            renderQuestionBank();
+            closeImportModal();
+            alert(`Successfully imported ${pendingParsedQuestions.length} question(s) into your bank!`);
+        }
+
+        function exportFullBackup() {
+            const dump = { questionsBank, paperData };
+            const str = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dump, null, 2));
+            const dl = document.createElement('a');
+            dl.setAttribute("href", str);
+            dl.setAttribute("download", `EduPaper_Backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(dl);
+            dl.click();
+            dl.remove();
+        }
+
+        function importFullBackup(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const imported = JSON.parse(evt.target.result);
+                    if (imported.questionsBank) { questionsBank = imported.questionsBank; dbSaveQuestions(questionsBank); }
+                    if (imported.paperData) { paperData = imported.paperData; dbSavePaperState(paperData); }
+                    populateFilters();
+                    renderQuestionBank();
+                    loadPaperConfigUI();
+                    renderPaper();
+                    alert('Data restored successfully!');
+                } catch (err) { alert('Invalid backup JSON.'); }
+            };
+            reader.readAsText(file);
+        }
+
+        function renderMath() {
+            setTimeout(() => {
+                document.querySelectorAll('.render-math').forEach(el => {
+                    if (!el.getAttribute('data-katex-rendered')) {
+                        const raw = el.innerHTML;
+                        el.innerHTML = raw.replace(/\$(.*?)\$/g, (m, f) => {
+                            try { return katex.renderToString(f, { throwOnError: false }); } catch (err) { return m; }
+                        });
+                        el.setAttribute('data-katex-rendered', 'true');
+                    }
+                });
+            }, 50);
+        }
+
+        function triggerPrint() { window.print(); }
+    </script>
+</body>
+</html>
